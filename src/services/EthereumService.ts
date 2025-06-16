@@ -3,14 +3,18 @@ import axios from 'axios';
 import { config } from '@/config/config';
 import { logger } from '@/utils/logger';
 import { Transaction, TokenTransfer, WalletDetails, TokenBalance } from '@/types';
+import { RedisService } from './RedisService';
 
 export class EthereumService {
   private provider: ethers.JsonRpcProvider | null = null;
   private backupProvider: ethers.JsonRpcProvider | null = null;
   private currentProvider: ethers.JsonRpcProvider | null = null;
+  private redisService: RedisService;
+  private rateLimitMap: Map<string, number> = new Map();
 
-  constructor() {
+  constructor(redisService?: RedisService) {
     this.initializeProviders();
+    this.redisService = redisService || new RedisService();
   }
 
   private initializeProviders(): void {
@@ -129,6 +133,9 @@ export class EthereumService {
         return await this.getTransactionsFromProvider(address, limit);
       }
 
+      // Apply rate limiting for Etherscan
+      await this.applyRateLimit('etherscan', 200); // 200ms between calls (5 calls/second)
+
       const params = new URLSearchParams({
         module: 'account',
         action: 'txlist',
@@ -143,7 +150,13 @@ export class EthereumService {
 
       const response = await axios.get(
         `https://api.etherscan.io/api?${params.toString()}`,
-        { timeout: 10000 }
+        {
+          timeout: 15000,
+          headers: {
+            'User-Agent': 'crypto-bubble-map-backend/1.0.0',
+            'Accept': 'application/json',
+          },
+        }
       );
 
       if (response.data.status !== '1') {
@@ -185,6 +198,9 @@ export class EthereumService {
         return [];
       }
 
+      // Apply rate limiting for Etherscan
+      await this.applyRateLimit('etherscan', 200);
+
       const params = new URLSearchParams({
         module: 'account',
         action: 'tokentx',
@@ -197,7 +213,13 @@ export class EthereumService {
 
       const response = await axios.get(
         `https://api.etherscan.io/api?${params.toString()}`,
-        { timeout: 10000 }
+        {
+          timeout: 15000,
+          headers: {
+            'User-Agent': 'crypto-bubble-map-backend/1.0.0',
+            'Accept': 'application/json',
+          },
+        }
       );
 
       if (response.data.status !== '1') {
@@ -273,15 +295,49 @@ export class EthereumService {
 
   public async getETHPrice(): Promise<number> {
     try {
+      // Apply rate limiting for CoinGecko
+      await this.applyRateLimit('coingecko', 1200); // 1.2 seconds between calls
+
+      // Check cache first
+      const cacheKey = 'eth_price';
+      const cached = await this.getCachedData<number>(cacheKey);
+      if (cached) {
+        logger.debug('Cache hit for ETH price');
+        return cached;
+      }
+
       const response = await axios.get(
         'https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=usd',
-        { timeout: 5000 }
+        {
+          timeout: 10000,
+          headers: {
+            'User-Agent': 'crypto-bubble-map-backend/1.0.0',
+            'Accept': 'application/json',
+          },
+        }
       );
 
-      return response.data.ethereum.usd;
-    } catch (error) {
+      const price = response.data.ethereum.usd;
+
+      // Cache the result for 5 minutes
+      await this.setCachedData(cacheKey, price, 300);
+
+      return price;
+    } catch (error: any) {
       logger.error('Error fetching ETH price:', error);
-      return 0; // Return 0 if price fetch fails
+
+      if (error.response?.status === 429) {
+        logger.warn('CoinGecko rate limited, using cached or default price');
+
+        // Try to get stale cached data
+        const stalePrice = await this.getCachedData<number>('eth_price', true);
+        if (stalePrice) {
+          logger.warn('Using stale ETH price data');
+          return stalePrice;
+        }
+      }
+
+      return 3000; // Return reasonable default if price fetch fails
     }
   }
 
@@ -311,5 +367,78 @@ export class EthereumService {
 
   public normalizeAddress(address: string): string {
     return ethers.getAddress(address);
+  }
+
+  /**
+   * Apply rate limiting for external API calls
+   */
+  private async applyRateLimit(key: string, delay: number): Promise<void> {
+    const now = Date.now();
+    const lastCall = this.rateLimitMap.get(key) || 0;
+    const timeSinceLastCall = now - lastCall;
+
+    if (timeSinceLastCall < delay) {
+      const waitTime = delay - timeSinceLastCall;
+      logger.debug(`Rate limiting ${key}: waiting ${waitTime}ms`);
+      await this.sleep(waitTime);
+    }
+
+    this.rateLimitMap.set(key, Date.now());
+  }
+
+  /**
+   * Sleep utility for rate limiting
+   */
+  private sleep(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  /**
+   * Get cached data with optional stale data support
+   */
+  private async getCachedData<T>(key: string, allowStale: boolean = false): Promise<T | null> {
+    try {
+      const cached = await this.redisService.get<{
+        data: T;
+        timestamp: number;
+        ttl: number;
+      }>(key);
+
+      if (!cached) {
+        return null;
+      }
+
+      const now = Date.now();
+      const age = now - cached.timestamp;
+
+      if (!allowStale && age > cached.ttl * 1000) {
+        // Data is stale and we don't allow stale data
+        return null;
+      }
+
+      return cached.data;
+
+    } catch (error) {
+      logger.error(`Error getting cached data for ${key}:`, error);
+      return null;
+    }
+  }
+
+  /**
+   * Set cached data with TTL
+   */
+  private async setCachedData<T>(key: string, data: T, ttl: number): Promise<void> {
+    try {
+      const cacheData = {
+        data,
+        timestamp: Date.now(),
+        ttl,
+      };
+
+      await this.redisService.set(key, cacheData, ttl * 2); // Store for 2x TTL to allow stale reads
+
+    } catch (error) {
+      logger.error(`Error setting cached data for ${key}:`, error);
+    }
   }
 }

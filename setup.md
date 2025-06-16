@@ -89,6 +89,28 @@ sudo systemctl start redis-server
 # Download from https://redis.io/download
 ```
 
+2. Configure Redis connection in `.env`:
+```bash
+# Individual parameters (recommended)
+REDIS_HOST=localhost
+REDIS_PORT=6379
+REDIS_PASS=dev
+REDIS_DB=0
+
+# Or use URL format (backward compatibility)
+REDIS_URL=redis://localhost:6379
+```
+
+3. For development with password protection:
+```bash
+# Edit redis.conf
+requirepass dev
+
+# Restart Redis
+brew services restart redis  # macOS
+sudo systemctl restart redis-server  # Linux
+```
+
 ### 4. Start the Backend
 
 ```bash
@@ -145,6 +167,7 @@ services:
       - "6379:6379"
     volumes:
       - redis_data:/data
+    command: redis-server --requirepass dev
 
 volumes:
   postgres_data:
@@ -197,7 +220,15 @@ PORT=3001
 # Use secure database connections
 DATABASE_URL=postgresql://user:pass@prod-db:5432/crypto_bubble_map
 NEO4J_URI=neo4j+s://prod-neo4j:7687
-REDIS_URL=redis://prod-redis:6379
+
+# Redis configuration (use individual parameters for better control)
+REDIS_HOST=prod-redis
+REDIS_PORT=6379
+REDIS_PASS=your_secure_redis_password
+REDIS_DB=0
+
+# Or use URL format (backward compatibility)
+# REDIS_URL=redis://prod-redis:6379
 
 # Use production-grade RPC endpoints
 ETHEREUM_RPC_URL=https://mainnet.infura.io/v3/YOUR_PROD_PROJECT_ID

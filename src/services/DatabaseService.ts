@@ -87,7 +87,7 @@ export class DatabaseService {
     try {
       const result = await this.pool.query(text, params);
       const duration = Date.now() - start;
-      
+
       logger.debug('Executed query', {
         text: text.substring(0, 100) + (text.length > 100 ? '...' : ''),
         duration: `${duration}ms`,
@@ -107,7 +107,7 @@ export class DatabaseService {
 
   public async transaction<T>(callback: (client: PoolClient) => Promise<T>): Promise<T> {
     const client = await this.getClient();
-    
+
     try {
       await client.query('BEGIN');
       const result = await callback(client);
@@ -167,6 +167,42 @@ export class DatabaseService {
         );
       `);
 
+      // Create market data history table
+      await this.query(`
+        CREATE TABLE IF NOT EXISTS market_data_history (
+          id SERIAL PRIMARY KEY,
+          eth_price DECIMAL(15, 2),
+          eth_market_cap BIGINT,
+          eth_volume_24h BIGINT,
+          eth_price_change_24h DECIMAL(10, 4),
+          gas_slow INTEGER,
+          gas_standard INTEGER,
+          gas_fast INTEGER,
+          gas_instant INTEGER,
+          block_number BIGINT,
+          block_time INTEGER,
+          difficulty VARCHAR(100),
+          hash_rate VARCHAR(100),
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+        );
+      `);
+
+      // Create job execution history table
+      await this.query(`
+        CREATE TABLE IF NOT EXISTS job_execution_history (
+          id SERIAL PRIMARY KEY,
+          job_type VARCHAR(50) NOT NULL,
+          job_id VARCHAR(100) NOT NULL,
+          status VARCHAR(20) NOT NULL,
+          started_at TIMESTAMP WITH TIME ZONE,
+          completed_at TIMESTAMP WITH TIME ZONE,
+          duration_ms INTEGER,
+          result_summary JSONB,
+          error_message TEXT,
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+        );
+      `);
+
       // Create transactions table
       await this.query(`
         CREATE TABLE IF NOT EXISTS transactions (
@@ -208,13 +244,13 @@ export class DatabaseService {
       await this.query('CREATE INDEX IF NOT EXISTS idx_wallets_balance ON wallets(balance DESC);');
       await this.query('CREATE INDEX IF NOT EXISTS idx_wallets_transaction_count ON wallets(transaction_count DESC);');
       await this.query('CREATE INDEX IF NOT EXISTS idx_wallets_last_activity ON wallets(last_activity DESC);');
-      
+
       await this.query('CREATE INDEX IF NOT EXISTS idx_transactions_hash ON transactions(hash);');
       await this.query('CREATE INDEX IF NOT EXISTS idx_transactions_from ON transactions(from_address);');
       await this.query('CREATE INDEX IF NOT EXISTS idx_transactions_to ON transactions(to_address);');
       await this.query('CREATE INDEX IF NOT EXISTS idx_transactions_timestamp ON transactions(timestamp DESC);');
       await this.query('CREATE INDEX IF NOT EXISTS idx_transactions_block ON transactions(block_number DESC);');
-      
+
       await this.query('CREATE INDEX IF NOT EXISTS idx_token_transfers_hash ON token_transfers(transaction_hash);');
       await this.query('CREATE INDEX IF NOT EXISTS idx_token_transfers_from ON token_transfers(from_address);');
       await this.query('CREATE INDEX IF NOT EXISTS idx_token_transfers_to ON token_transfers(to_address);');

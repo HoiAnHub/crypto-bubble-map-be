@@ -11,8 +11,13 @@ import { errorHandler } from '@/middleware/errorHandler';
 import { rateLimiter } from '@/middleware/rateLimiter';
 import { walletRoutes } from '@/routes/walletRoutes';
 import { healthRoutes } from '@/routes/healthRoutes';
+import { jobRoutes, setJobSchedulerService } from '@/routes/jobRoutes';
 import { DatabaseService } from '@/services/DatabaseService';
 import { RedisService } from '@/services/RedisService';
+import { EthereumService } from '@/services/EthereumService';
+import { Neo4jService } from '@/services/Neo4jService';
+import { JobQueueService } from '@/services/JobQueueService';
+import { JobSchedulerService } from '@/services/JobSchedulerService';
 
 // Load environment variables
 dotenv.config();
@@ -21,12 +26,26 @@ class App {
   public app: express.Application;
   private databaseService: DatabaseService;
   private redisService: RedisService;
+  private ethereumService: EthereumService;
+  private neo4jService: Neo4jService;
+  private jobQueueService: JobQueueService;
+  private jobSchedulerService: JobSchedulerService;
 
   constructor() {
     this.app = express();
     this.databaseService = new DatabaseService();
     this.redisService = new RedisService();
-    
+    this.ethereumService = new EthereumService(this.redisService);
+    this.neo4jService = new Neo4jService();
+    this.jobQueueService = new JobQueueService(this.redisService);
+    this.jobSchedulerService = new JobSchedulerService(
+      this.jobQueueService,
+      this.redisService,
+      this.databaseService,
+      this.ethereumService,
+      this.neo4jService
+    );
+
     this.initializeMiddleware();
     this.initializeRoutes();
     this.initializeErrorHandling();
@@ -35,7 +54,7 @@ class App {
   private initializeMiddleware(): void {
     // Security middleware
     this.app.use(helmet());
-    
+
     // CORS configuration
     this.app.use(cors({
       origin: config.corsOrigin,
@@ -63,9 +82,13 @@ class App {
   private initializeRoutes(): void {
     // Health check routes
     this.app.use('/health', healthRoutes);
-    
+
     // API routes
     this.app.use('/api/wallets', walletRoutes);
+    this.app.use('/api/jobs', jobRoutes);
+
+    // Set job scheduler service for job routes
+    setJobSchedulerService(this.jobSchedulerService);
 
     // Root endpoint
     this.app.get('/', (req, res) => {
@@ -73,6 +96,7 @@ class App {
         message: 'Crypto Bubble Map Backend API',
         version: '1.0.0',
         status: 'running',
+        backgroundJobs: config.jobs.enabled,
         timestamp: new Date().toISOString()
       });
     });
@@ -96,6 +120,16 @@ class App {
       // Initialize database connections
       await this.databaseService.connect();
       await this.redisService.connect();
+      await this.neo4jService.connect();
+
+      // Initialize database tables
+      await this.databaseService.initializeTables();
+
+      // Start background job scheduler
+      if (config.jobs.enabled) {
+        await this.jobSchedulerService.start();
+        logger.info('🔄 Background job scheduler started');
+      }
 
       // Start the server
       const port = config.port;
@@ -105,6 +139,7 @@ class App {
         logger.info(`🚀 Server running on http://${host}:${port}`);
         logger.info(`📊 Environment: ${config.nodeEnv}`);
         logger.info(`🔗 Ethereum Network: ${config.ethereum.network}`);
+        logger.info(`⚡ Background jobs: ${config.jobs.enabled ? 'enabled' : 'disabled'}`);
       });
 
       // Graceful shutdown handling
@@ -119,10 +154,19 @@ class App {
   private setupGracefulShutdown(): void {
     const gracefulShutdown = async (signal: string) => {
       logger.info(`Received ${signal}. Starting graceful shutdown...`);
-      
+
       try {
+        // Stop job scheduler
+        if (config.jobs.enabled) {
+          await this.jobSchedulerService.stop();
+          logger.info('Job scheduler stopped');
+        }
+
+        // Disconnect from services
+        await this.neo4jService.disconnect();
         await this.databaseService.disconnect();
         await this.redisService.disconnect();
+
         logger.info('Graceful shutdown completed');
         process.exit(0);
       } catch (error) {

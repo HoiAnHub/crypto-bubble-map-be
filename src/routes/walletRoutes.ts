@@ -28,6 +28,18 @@ router.get('/search', walletController.searchWallets);
 router.get('/stats', walletController.getWalletStats);
 
 /**
+ * @route GET /api/wallets/popular
+ * @desc Get popular wallets from pre-crawled data
+ */
+router.get('/popular', walletController.getPopularWallets);
+
+/**
+ * @route GET /api/wallets/market-data
+ * @desc Get market data from pre-crawled data
+ */
+router.get('/market-data', walletController.getMarketData);
+
+/**
  * @route POST /api/wallets/batch
  * @desc Get details for multiple wallets
  * @body addresses - Array of wallet addresses (max 20)

@@ -75,7 +75,7 @@ export class Neo4jService {
 
   public async createWalletNode(wallet: WalletNode): Promise<void> {
     const session = await this.getSession();
-    
+
     try {
       await session.run(
         `
@@ -111,9 +111,14 @@ export class Neo4jService {
     }
   }
 
+  // Alias for createWalletNode for consistency with crawler
+  public async createOrUpdateWallet(wallet: WalletNode): Promise<void> {
+    return this.createWalletNode(wallet);
+  }
+
   public async createTransactionRelationship(transaction: Transaction): Promise<void> {
     const session = await this.getSession();
-    
+
     try {
       await session.run(
         `
@@ -152,7 +157,7 @@ export class Neo4jService {
 
   public async getWalletNetwork(address: string, depth: number = 2): Promise<GraphData> {
     const session = await this.getSession();
-    
+
     try {
       const result = await session.run(
         `
@@ -216,7 +221,7 @@ export class Neo4jService {
 
   public async getWalletDetails(address: string): Promise<WalletNode | null> {
     const session = await this.getSession();
-    
+
     try {
       const result = await session.run(
         `
@@ -254,12 +259,12 @@ export class Neo4jService {
 
   public async searchWallets(query: string, limit: number = 10): Promise<WalletNode[]> {
     const session = await this.getSession();
-    
+
     try {
       const result = await session.run(
         `
         MATCH (w:Wallet)
-        WHERE w.address CONTAINS $query 
+        WHERE w.address CONTAINS $query
            OR w.label CONTAINS $query
         RETURN w
         ORDER BY w.transactionCount DESC
@@ -291,7 +296,7 @@ export class Neo4jService {
 
   public async getTransactionHistory(address: string, limit: number = 10): Promise<TransactionLink[]> {
     const session = await this.getSession();
-    
+
     try {
       const result = await session.run(
         `
@@ -306,7 +311,7 @@ export class Neo4jService {
       return result.records.map(record => {
         const rel = record.get('r');
         const other = record.get('other');
-        
+
         return {
           source: rel.startNodeId.toString(),
           target: rel.endNodeId.toString(),
@@ -329,10 +334,10 @@ export class Neo4jService {
   private calculateNodeSize(txCount: number): number {
     const minSize = 5;
     const maxSize = 30;
-    
+
     if (txCount === 0) return minSize;
     const logSize = Math.log10(txCount + 1) * 5;
-    
+
     return Math.max(minSize, Math.min(maxSize, logSize));
   }
 
@@ -340,15 +345,15 @@ export class Neo4jService {
     if (properties.isContract) {
       return '#8B5CF6'; // purple for contracts
     }
-    
+
     if (properties.label) {
       return '#10B981'; // green for labeled wallets
     }
-    
+
     if (properties.balanceUSD && properties.balanceUSD > 10000) {
       return '#F59E0B'; // amber for high-value wallets
     }
-    
+
     return '#3B82F6'; // blue default
   }
 

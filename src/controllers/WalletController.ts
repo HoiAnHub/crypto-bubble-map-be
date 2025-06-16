@@ -301,4 +301,52 @@ export class WalletController {
       next(error);
     }
   };
+
+  /**
+   * GET /api/wallets/popular
+   * Get popular wallets from pre-crawled data
+   */
+  public getPopularWallets = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      logger.info('Getting popular wallets from cache');
+
+      // Try to get from cache first
+      const popularWallets = await this.walletService.getPopularWallets();
+
+      const response: ApiResponse = {
+        success: true,
+        data: popularWallets || [],
+        timestamp: new Date().toISOString(),
+      };
+
+      res.json(response);
+
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  /**
+   * GET /api/wallets/market-data
+   * Get market data from pre-crawled data
+   */
+  public getMarketData = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      logger.info('Getting market data from cache');
+
+      // Try to get from cache first
+      const marketData = await this.walletService.getMarketData();
+
+      const response: ApiResponse = {
+        success: true,
+        data: marketData,
+        timestamp: new Date().toISOString(),
+      };
+
+      res.json(response);
+
+    } catch (error) {
+      next(error);
+    }
+  };
 }

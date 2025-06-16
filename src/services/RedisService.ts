@@ -17,19 +17,52 @@ export class RedisService {
     }
 
     try {
-      this.client = createClient({
-        url: config.redis.url,
-        password: config.redis.password,
-        socket: {
-          reconnectStrategy: (retries) => {
+      // Use individual parameters if available, fallback to URL
+      const redisConfig: any = {};
+
+      if (config.redis.host && config.redis.port) {
+        // Use individual parameters
+        redisConfig.socket = {
+          host: config.redis.host,
+          port: config.redis.port,
+          reconnectStrategy: (retries: number) => {
             if (retries > 10) {
               logger.error('Redis reconnection failed after 10 attempts');
               return false;
             }
             return Math.min(retries * 100, 3000);
           },
-        },
-      });
+        };
+
+        if (config.redis.password) {
+          redisConfig.password = config.redis.password;
+        }
+
+        if (config.redis.database !== undefined && config.redis.database !== 0) {
+          redisConfig.database = config.redis.database;
+        }
+
+        logger.info(`Connecting to Redis at ${config.redis.host}:${config.redis.port} (DB: ${config.redis.database})`);
+      } else {
+        // Fallback to URL-based connection for backward compatibility
+        redisConfig.url = config.redis.url;
+        if (config.redis.password) {
+          redisConfig.password = config.redis.password;
+        }
+        redisConfig.socket = {
+          reconnectStrategy: (retries: number) => {
+            if (retries > 10) {
+              logger.error('Redis reconnection failed after 10 attempts');
+              return false;
+            }
+            return Math.min(retries * 100, 3000);
+          },
+        };
+
+        logger.info(`Connecting to Redis using URL: ${config.redis.url}`);
+      }
+
+      this.client = createClient(redisConfig);
 
       this.client.on('error', (error) => {
         logger.error('Redis client error:', error);
@@ -90,7 +123,7 @@ export class RedisService {
       };
 
       const serialized = JSON.stringify(cacheEntry);
-      
+
       if (ttlSeconds) {
         await this.client!.setEx(key, ttlSeconds, serialized);
       } else {
@@ -111,17 +144,17 @@ export class RedisService {
 
     try {
       const cached = await this.client!.get(key);
-      
+
       if (!cached) {
         return null;
       }
 
       const cacheEntry: CacheEntry<T> = JSON.parse(cached);
-      
+
       // Check if cache entry has expired
       const now = Date.now();
       const age = (now - cacheEntry.timestamp) / 1000; // age in seconds
-      
+
       if (age > cacheEntry.ttl) {
         // Cache expired, delete it
         await this.delete(key);
@@ -210,15 +243,108 @@ export class RedisService {
 
     // If not in cache, fetch the data
     const data = await fetchFunction();
-    
+
     // Store in cache for next time
     await this.set(key, data, ttlSeconds);
-    
+
     return data;
   }
 
   // Generate cache keys
   public static generateKey(prefix: string, ...parts: (string | number)[]): string {
     return `${prefix}:${parts.join(':')}`;
+  }
+
+  // Additional Redis operations for job queue
+  public async zadd(key: string, score: number, member: string): Promise<number> {
+    if (!this.isReady()) {
+      throw new Error('Redis not connected');
+    }
+    return await this.client!.zAdd(key, { score, value: member });
+  }
+
+  public async zrangebyscore(key: string, min: number, max: number): Promise<string[]> {
+    if (!this.isReady()) {
+      throw new Error('Redis not connected');
+    }
+    return await this.client!.zRangeByScore(key, min, max);
+  }
+
+  public async zrem(key: string, member: string): Promise<number> {
+    if (!this.isReady()) {
+      throw new Error('Redis not connected');
+    }
+    return await this.client!.zRem(key, member);
+  }
+
+  public async zcard(key: string): Promise<number> {
+    if (!this.isReady()) {
+      throw new Error('Redis not connected');
+    }
+    return await this.client!.zCard(key);
+  }
+
+  public async lpush(key: string, ...values: string[]): Promise<number> {
+    if (!this.isReady()) {
+      throw new Error('Redis not connected');
+    }
+    return await this.client!.lPush(key, values);
+  }
+
+  public async rpop(key: string): Promise<string | null> {
+    if (!this.isReady()) {
+      throw new Error('Redis not connected');
+    }
+    return await this.client!.rPop(key);
+  }
+
+  public async llen(key: string): Promise<number> {
+    if (!this.isReady()) {
+      throw new Error('Redis not connected');
+    }
+    return await this.client!.lLen(key);
+  }
+
+  public async sadd(key: string, ...members: string[]): Promise<number> {
+    if (!this.isReady()) {
+      throw new Error('Redis not connected');
+    }
+    return await this.client!.sAdd(key, members);
+  }
+
+  public async srem(key: string, ...members: string[]): Promise<number> {
+    if (!this.isReady()) {
+      throw new Error('Redis not connected');
+    }
+    return await this.client!.sRem(key, members);
+  }
+
+  public async scard(key: string): Promise<number> {
+    if (!this.isReady()) {
+      throw new Error('Redis not connected');
+    }
+    return await this.client!.sCard(key);
+  }
+
+  public async keys(pattern: string): Promise<string[]> {
+    if (!this.isReady()) {
+      throw new Error('Redis not connected');
+    }
+    return await this.client!.keys(pattern);
+  }
+
+  // Health check
+  public async healthCheck(): Promise<boolean> {
+    if (!this.isReady()) {
+      return false;
+    }
+
+    try {
+      await this.client!.ping();
+      return true;
+    } catch (error) {
+      logger.error('Redis health check failed:', error);
+      return false;
+    }
   }
 }

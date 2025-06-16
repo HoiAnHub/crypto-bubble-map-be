@@ -68,13 +68,13 @@ export class WalletService {
       if (networkData.nodes.length === 0) {
         logger.info(`No network data found for ${normalizedAddress}, building from transactions`);
         await this.buildWalletNetwork(normalizedAddress, depth);
-        
+
         // Try again after building
         const newNetworkData = await this.neo4jService.getWalletNetwork(normalizedAddress, depth);
-        
+
         // Cache the result
         await this.redisService.set(cacheKey, newNetworkData, config.cache.networkDataTtl);
-        
+
         return newNetworkData;
       }
 
@@ -211,13 +211,13 @@ export class WalletService {
     try {
       // Check if wallet exists in Neo4j
       const existingWallet = await this.neo4jService.getWalletDetails(address);
-      
+
       if (!existingWallet) {
         logger.info(`Creating new wallet entry for ${address}`);
-        
+
         // Get wallet details from Ethereum
         const walletDetails = await this.ethereumService.getWalletDetails(address);
-        
+
         // Create wallet node
         const walletNode: WalletNode = {
           id: '', // Will be set by Neo4j
@@ -270,7 +270,7 @@ export class WalletService {
       // If depth > 1, recursively build network for connected wallets
       if (depth > 1) {
         const connectedAddresses = new Set<string>();
-        
+
         transactions.forEach(tx => {
           if (tx.from !== address) connectedAddresses.add(tx.from);
           if (tx.to && tx.to !== address) connectedAddresses.add(tx.to);
@@ -278,7 +278,7 @@ export class WalletService {
 
         // Limit the number of connected wallets to process
         const addressesToProcess = Array.from(connectedAddresses).slice(0, 5);
-        
+
         for (const connectedAddress of addressesToProcess) {
           await this.buildWalletNetwork(connectedAddress, depth - 1);
         }
@@ -295,7 +295,7 @@ export class WalletService {
       await this.databaseService.query(
         `
         INSERT INTO wallets (
-          address, balance, balance_usd, transaction_count, is_contract, 
+          address, balance, balance_usd, transaction_count, is_contract,
           contract_type, label, tags, risk_score, first_seen, last_activity
         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
         ON CONFLICT (address) DO UPDATE SET
@@ -335,7 +335,7 @@ export class WalletService {
       await this.databaseService.query(
         `
         INSERT INTO transactions (
-          hash, from_address, to_address, value, value_usd, gas_used, 
+          hash, from_address, to_address, value, value_usd, gas_used,
           gas_price, timestamp, block_number, status, method_id, function_name
         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
         ON CONFLICT (hash) DO NOTHING
@@ -390,5 +390,49 @@ export class WalletService {
     }
 
     return score;
+  }
+
+  /**
+   * Get popular wallets from cache
+   */
+  public async getPopularWallets(): Promise<any> {
+    try {
+      const cacheKey = 'popular_wallets';
+      const cached = await this.redisService.get(cacheKey);
+
+      if (cached) {
+        logger.debug('Cache hit for popular wallets');
+        return cached;
+      }
+
+      logger.debug('No cached popular wallets found');
+      return null;
+
+    } catch (error) {
+      logger.error('Error getting popular wallets:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Get market data from cache
+   */
+  public async getMarketData(): Promise<any> {
+    try {
+      const cacheKey = 'market_data:latest';
+      const cached = await this.redisService.get(cacheKey);
+
+      if (cached) {
+        logger.debug('Cache hit for market data');
+        return cached;
+      }
+
+      logger.debug('No cached market data found');
+      return null;
+
+    } catch (error) {
+      logger.error('Error getting market data:', error);
+      return null;
+    }
   }
 }
