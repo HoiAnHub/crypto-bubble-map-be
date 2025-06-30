@@ -1,0 +1,737 @@
+# GraphQL Schema for Crypto Bubble Map Backend
+
+# Scalars
+scalar Time
+scalar JSON
+scalar BigInt
+
+# Enums
+enum WalletType {
+  REGULAR
+  EXCHANGE
+  CONTRACT
+  WHALE
+  MINER
+  DEFI
+  BRIDGE
+  MEV_BOT
+  ARBITRAGE_BOT
+  MARKET_MAKER
+  SUSPICIOUS
+  BLACKLISTED
+}
+
+enum RiskLevel {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+  UNKNOWN
+}
+
+enum TransactionType {
+  TRANSFER
+  SWAP
+  DEPOSIT
+  WITHDRAW
+  CONTRACT_CALL
+  NFT_TRANSFER
+}
+
+enum TransactionStatus {
+  SUCCESS
+  FAILED
+  PENDING
+}
+
+enum AlertType {
+  PHISHING
+  MEV
+  LAUNDERING
+  SANCTIONS
+  SCAM
+  SUSPICIOUS
+}
+
+enum AlertSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum RankingCategory {
+  QUALITY
+  REPUTATION
+  VOLUME
+  ACTIVITY
+  AGE
+  NETWORK
+  SAFETY
+}
+
+enum NetworkCategory {
+  LAYER1
+  LAYER2
+  SIDECHAIN
+}
+
+# Core Types
+type Wallet {
+  id: ID!
+  address: String!
+  label: String
+  balance: String
+  transactionCount: Int!
+  walletType: WalletType!
+  riskScore: RiskScore
+  tags: [String!]!
+  firstSeen: Time!
+  lastSeen: Time!
+  network: String!
+  socialProfiles: SocialProfiles
+  coordinates: Coordinates
+  isContract: Boolean!
+  associatedExchanges: [String!]!
+  associatedProtocols: [String!]!
+}
+
+type WalletConnection {
+  source: String!
+  target: String!
+  value: String!
+  transactionCount: Int!
+  firstTransaction: Time!
+  lastTransaction: Time!
+  riskLevel: RiskLevel!
+}
+
+type WalletNetwork {
+  nodes: [Wallet!]!
+  links: [WalletConnection!]!
+  metadata: NetworkMetadata!
+}
+
+type NetworkMetadata {
+  totalNodes: Int!
+  totalLinks: Int!
+  maxDepth: Int!
+  centerWallet: String!
+  generatedAt: Time!
+}
+
+type RiskScore {
+  address: String!
+  totalScore: Int!
+  riskLevel: RiskLevel!
+  factors: RiskFactors!
+  flags: [String!]!
+  lastUpdated: Time!
+}
+
+type RiskFactors {
+  phishing: Int!
+  mev: Int!
+  laundering: Int!
+  sanctions: Int!
+  scam: Int!
+  suspicious: Int!
+}
+
+type SocialProfiles {
+  twitter: String
+  discord: String
+  telegram: String
+  github: String
+  website: String
+  linkedin: String
+}
+
+type Coordinates {
+  x: Float
+  y: Float
+}
+
+# Transaction Types
+type Transaction {
+  id: ID!
+  hash: String!
+  from: String!
+  to: String
+  value: String!
+  timestamp: Time!
+  blockNumber: String!
+  gasUsed: String!
+  gasPrice: String!
+  gasFee: String!
+  transactionType: TransactionType!
+  method: String
+  riskLevel: RiskLevel!
+  status: TransactionStatus!
+  network: String!
+}
+
+type PairwiseTransaction {
+  id: ID!
+  hash: String!
+  from: String!
+  to: String!
+  value: String!
+  token: String!
+  tokenSymbol: String!
+  usdValue: Float
+  timestamp: Time!
+  blockNumber: String!
+  gasUsed: String!
+  gasPrice: String!
+  gasFee: String!
+  transactionType: TransactionType!
+  method: String
+  riskLevel: RiskLevel!
+  riskFactors: [String!]!
+  status: TransactionStatus!
+  direction: TransactionDirection!
+  contractAddress: String
+}
+
+enum TransactionDirection {
+  INCOMING
+  OUTGOING
+}
+
+type PairwiseTransactionSummary {
+  walletA: String!
+  walletB: String!
+  totalTransactions: Int!
+  totalVolume: String!
+  totalVolumeUSD: Float!
+  firstTransaction: Time!
+  lastTransaction: Time!
+  topTokens: [TokenSummary!]!
+  riskDistribution: RiskDistribution!
+  transactionTypes: TransactionTypeDistribution!
+}
+
+type TokenSummary {
+  symbol: String!
+  volume: String!
+  volumeUSD: Float!
+  transactionCount: Int!
+}
+
+type RiskDistribution {
+  low: Int!
+  medium: Int!
+  high: Int!
+  critical: Int!
+}
+
+type TransactionTypeDistribution {
+  transfer: Int!
+  swap: Int!
+  deposit: Int!
+  withdraw: Int!
+  contractCall: Int!
+}
+
+# Money Flow Types
+type MoneyFlowData {
+  centerAccount: MoneyFlowAccount!
+  inboundAccounts: [MoneyFlowAccount!]!
+  outboundAccounts: [MoneyFlowAccount!]!
+  transactions: [MoneyFlowTransaction!]!
+  summary: MoneyFlowSummary!
+  sankeyData: SankeyData!
+}
+
+type MoneyFlowAccount {
+  address: String!
+  label: String
+  totalValue: String!
+  totalUsdValue: Float!
+  transactionCount: Int!
+  firstSeen: Time!
+  lastSeen: Time!
+  riskScore: Float!
+  tags: [String!]!
+  isExchange: Boolean!
+  isContract: Boolean!
+}
+
+type MoneyFlowTransaction {
+  id: ID!
+  hash: String!
+  from: String!
+  to: String!
+  value: String!
+  token: String
+  tokenSymbol: String
+  usdValue: Float
+  timestamp: Time!
+  blockNumber: String!
+  gasUsed: String!
+  gasPrice: String!
+  gasFee: String!
+  method: String
+  transactionType: TransactionType!
+  riskLevel: RiskLevel!
+}
+
+type MoneyFlowSummary {
+  totalInbound: String!
+  totalOutbound: String!
+  totalInboundUsd: Float!
+  totalOutboundUsd: Float!
+  uniqueCounterparties: Int!
+  timeRange: TimeRange!
+  topTokens: [TokenSummary!]!
+}
+
+type SankeyData {
+  nodes: [SankeyNode!]!
+  links: [SankeyLink!]!
+}
+
+type SankeyNode {
+  id: String!
+  name: String!
+  category: SankeyNodeCategory!
+  value: String!
+  color: String!
+}
+
+enum SankeyNodeCategory {
+  SOURCE
+  CENTER
+  TARGET
+}
+
+type SankeyLink {
+  source: String!
+  target: String!
+  value: String!
+  color: String!
+  transactions: [MoneyFlowTransaction!]!
+}
+
+type TimeRange {
+  start: Time!
+  end: Time!
+}
+
+# Dashboard & Analytics Types
+type DashboardStats {
+  totalWallets: Int!
+  totalVolume: String!
+  totalTransactions: Int!
+  flaggedWallets: Int!
+  whitelistedWallets: Int!
+  averageQualityScore: Float!
+  walletTypes: WalletTypeDistribution!
+  riskDistribution: RiskDistribution!
+  networkActivity: [NetworkActivity!]!
+  topTokens: [String!]!
+  recentActivity: [ActivitySummary!]!
+}
+
+type WalletTypeDistribution {
+  regular: Int!
+  exchange: Int!
+  contract: Int!
+  whale: Int!
+  defi: Int!
+  bridge: Int!
+  miner: Int!
+}
+
+type NetworkActivity {
+  timestamp: Time!
+  transactionCount: Int!
+  volume: String!
+  uniqueWallets: Int!
+}
+
+type ActivitySummary {
+  type: String!
+  count: Int!
+  volume: String!
+  timestamp: Time!
+}
+
+# Wallet Rankings
+type WalletRanking {
+  rank: Int!
+  wallet: WalletMetrics!
+  score: Float!
+  change: Int
+}
+
+type WalletMetrics {
+  address: String!
+  label: String
+  qualityScore: Float!
+  riskScore: Float!
+  reputationScore: Float!
+  transactionCount: Int!
+  transactionVolume: String!
+  averageTransactionSize: String!
+  activityFrequency: Float!
+  walletAge: Int!
+  firstTransactionDate: Time!
+  lastTransactionDate: Time!
+  connectionCount: Int!
+  uniqueCounterparties: Int!
+  networkInfluence: Float!
+  riskFlags: [String!]!
+  isWhitelisted: Boolean!
+  isFlagged: Boolean!
+  walletType: WalletType!
+  profitabilityScore: Float
+  liquidityScore: Float
+  hasVerifiedSocials: Boolean!
+  socialScore: Float!
+}
+
+# Network Information
+type NetworkInfo {
+  id: String!
+  name: String!
+  symbol: String!
+  category: NetworkCategory!
+  tvl: Float
+  dailyTransactions: Int
+  tps: Int
+  gasPrice: Float
+  blockTime: Int
+  isActive: Boolean!
+  gradientFrom: String!
+  gradientTo: String!
+}
+
+type NetworkStats {
+  networkId: String!
+  totalWallets: Int!
+  totalVolume: String!
+  totalTransactions: Int!
+  flaggedWallets: Int!
+  walletTypes: WalletTypeDistribution!
+  riskDistribution: RiskDistribution!
+  lastUpdate: Time!
+}
+
+type NetworkRanking {
+  rank: Int!
+  network: NetworkInfo!
+  score: Float!
+  change: Int
+  metrics: NetworkMetrics!
+}
+
+type NetworkMetrics {
+  tvl: Float!
+  marketCap: Float!
+  dailyVolume: Float!
+  activeUsers: Int!
+  developerActivity: Float!
+  ecosystemGrowth: Float!
+}
+
+# Watch List Types
+type WatchedWallet {
+  id: ID!
+  address: String!
+  label: String
+  tags: [String!]!
+  addedAt: Time!
+  lastActivity: Time
+  balance: String
+  transactionCount: Int
+  riskScore: Float
+  alertsEnabled: Boolean!
+  customThresholds: CustomThresholds
+  notes: String
+  lastChecked: Time
+  alertHistory: [WalletAlert!]!
+}
+
+type CustomThresholds {
+  balanceChange: Float!
+  transactionVolume: String!
+  riskScoreIncrease: Float!
+}
+
+type WalletAlert {
+  id: ID!
+  walletId: String!
+  type: WalletAlertType!
+  severity: AlertSeverity!
+  message: String!
+  details: JSON
+  timestamp: Time!
+  acknowledged: Boolean!
+}
+
+enum WalletAlertType {
+  BALANCE_CHANGE
+  HIGH_VOLUME
+  RISK_INCREASE
+  SUSPICIOUS_ACTIVITY
+  NEW_TRANSACTION
+}
+
+type WatchListStats {
+  totalWallets: Int!
+  activeAlerts: Int!
+  highRiskWallets: Int!
+  totalValue: String!
+  recentActivity: Int!
+}
+
+# Security Alerts
+type SecurityAlert {
+  id: ID!
+  type: AlertType!
+  severity: AlertSeverity!
+  title: String!
+  description: String!
+  walletAddress: String!
+  timestamp: Time!
+  status: AlertStatus!
+  confidence: Int!
+  relatedTransactions: [String!]!
+  actionRequired: Boolean!
+  metadata: JSON
+}
+
+enum AlertStatus {
+  ACTIVE
+  RESOLVED
+  INVESTIGATING
+}
+
+# AI Assistant
+type AIResponse {
+  answer: String!
+  confidence: Float!
+  sources: [String!]!
+  relatedQuestions: [String!]!
+  actionItems: [String!]!
+}
+
+# Input Types
+input WalletNetworkInput {
+  address: String!
+  depth: Int = 2
+  networkId: String = "ethereum"
+  includeRiskAnalysis: Boolean = true
+  includeTransactionVolumes: Boolean = true
+}
+
+input MoneyFlowFilters {
+  flowType: FlowType!
+  transferType: TransferType!
+  topN: Int = 50
+  timeRange: TimeRangeInput
+  blockRange: BlockRangeInput
+  tokenFilter: String
+  searchQuery: String
+  minValue: String
+  maxValue: String
+  riskLevel: RiskLevel
+}
+
+enum FlowType {
+  INBOUND
+  OUTBOUND
+  BOTH
+}
+
+enum TransferType {
+  ETH
+  TOKEN
+  BOTH
+}
+
+input TimeRangeInput {
+  start: Time!
+  end: Time!
+}
+
+input BlockRangeInput {
+  start: String!
+  end: String!
+}
+
+input TransactionFilters {
+  direction: TransactionDirection
+  tokenFilter: String
+  riskLevel: RiskLevel
+  transactionType: TransactionType
+  timeRange: TimeRangeInput
+  minValue: String
+  maxValue: String
+}
+
+input WatchedWalletInput {
+  address: String!
+  label: String
+  tags: [String!]
+  alertsEnabled: Boolean = true
+  customThresholds: CustomThresholdsInput
+  notes: String
+}
+
+input CustomThresholdsInput {
+  balanceChange: Float!
+  transactionVolume: String!
+  riskScoreIncrease: Float!
+}
+
+input WatchedWalletUpdateInput {
+  label: String
+  tags: [String!]
+  alertsEnabled: Boolean
+  customThresholds: CustomThresholdsInput
+  notes: String
+}
+
+input AIContext {
+  analysisType: String
+  timeframe: String
+  networkId: String
+}
+
+# Root Types
+type Query {
+  # Wallet Network Analysis
+  walletNetwork(input: WalletNetworkInput!): WalletNetwork!
+  wallet(address: String!): Wallet
+  walletRiskScore(address: String!): RiskScore
+  
+  # Transaction Analysis
+  pairwiseTransactions(
+    walletA: String!
+    walletB: String!
+    limit: Int = 100
+    offset: Int = 0
+    filters: TransactionFilters
+  ): PairwiseTransactionResult!
+  
+  moneyFlowData(walletAddress: String!, filters: MoneyFlowFilters!): MoneyFlowData!
+  
+  # Dashboard & Analytics
+  dashboardStats(networkId: String): DashboardStats!
+  walletRankings(
+    category: RankingCategory!
+    networkId: String
+    limit: Int = 100
+    offset: Int = 0
+  ): WalletRankingResult!
+  
+  # Network Information
+  networks: [NetworkInfo!]!
+  networkStats(networkId: String!): NetworkStats
+  networkRankings(limit: Int = 20): [NetworkRanking!]!
+  
+  # Watch List
+  watchList: [WatchedWallet!]!
+  watchListStats: WatchListStats!
+  walletAlerts(
+    walletId: String
+    acknowledged: Boolean
+    severity: AlertSeverity
+    limit: Int = 50
+  ): [WalletAlert!]!
+  
+  # Security Alerts
+  securityAlerts(
+    filters: SecurityAlertFilters
+    limit: Int = 50
+    offset: Int = 0
+  ): SecurityAlertResult!
+  
+  # AI Assistant
+  askAI(question: String!, context: AIContext, walletAddress: String): AIResponse!
+  
+  # Search
+  searchWallets(query: String!, limit: Int = 20): [WalletSearchResult!]!
+}
+
+type Mutation {
+  # Watch List Management
+  addToWatchList(input: WatchedWalletInput!): WatchedWallet!
+  removeFromWatchList(walletId: ID!): Boolean!
+  updateWatchListWallet(walletId: ID!, updates: WatchedWalletUpdateInput!): WatchedWallet!
+  
+  # Alert Management
+  acknowledgeWalletAlert(alertId: ID!): WalletAlert!
+  acknowledgeSecurityAlert(alertId: ID!): SecurityAlert!
+  resolveSecurityAlert(alertId: ID!, resolution: String!, notes: String): SecurityAlert!
+  
+  # Risk Management
+  updateRiskScore(address: String!, manualFlags: [String!], whitelistStatus: Boolean): RiskScore!
+}
+
+type Subscription {
+  # Real-time Updates
+  walletUpdates(addresses: [String!]!): WalletUpdate!
+  newTransactions(walletAddress: String!, minValue: String): TransactionUpdate!
+  riskAlerts(minSeverity: AlertSeverity, walletIds: [String!]): SecurityAlert!
+  networkActivity(networkId: String!): NetworkActivityUpdate!
+}
+
+# Additional Result Types
+type PairwiseTransactionResult {
+  transactions: [PairwiseTransaction!]!
+  summary: PairwiseTransactionSummary!
+  hasMore: Boolean!
+}
+
+type WalletRankingResult {
+  rankings: [WalletRanking!]!
+  hasMore: Boolean!
+}
+
+type SecurityAlertResult {
+  alerts: [SecurityAlert!]!
+  hasMore: Boolean!
+}
+
+type WalletSearchResult {
+  address: String!
+  label: String
+  tags: [String!]!
+  riskScore: Float
+  transactionCount: Int!
+  balance: String
+  relevanceScore: Float!
+}
+
+type WalletUpdate {
+  address: String!
+  balance: String
+  transactionCount: Int
+  riskScore: RiskScore
+  lastActivity: Time
+}
+
+type TransactionUpdate {
+  transaction: Transaction!
+  walletAddress: String!
+}
+
+type NetworkActivityUpdate {
+  networkId: String!
+  timestamp: Time!
+  transactionCount: Int!
+  volume: String!
+  uniqueWallets: Int!
+}
+
+input SecurityAlertFilters {
+  type: AlertType
+  severity: AlertSeverity
+  status: AlertStatus
+  walletAddress: String
+  timeRange: TimeRangeInput
+}
