@@ -61,9 +61,9 @@ func (r *MongoTransactionRepository) GetPairwiseTransactions(ctx context.Context
 		WalletA:           walletA,
 		WalletB:           walletB,
 		TotalTransactions: int64(len(transactions)),
-		TopTokens:         []entity.TokenSummary{},
+		TopTokens:         []entity.TopToken{},
 		RiskDistribution:  entity.RiskDistribution{},
-		TransactionTypes:  entity.TransactionTypeDistribution{},
+		TransactionTypes:  make(map[string]int64),
 	}
 
 	if len(transactions) > 0 {
@@ -71,11 +71,29 @@ func (r *MongoTransactionRepository) GetPairwiseTransactions(ctx context.Context
 		summary.LastTransaction = transactions[0].Timestamp
 	}
 
+	// Convert PairwiseTransaction to Transaction
+	convertedTransactions := make([]entity.Transaction, len(transactions))
+	for i, tx := range transactions {
+		convertedTransactions[i] = entity.Transaction{
+			Hash:            tx.Hash,
+			From:            tx.From,
+			To:              &tx.To,
+			Value:           tx.Value,
+			Timestamp:       tx.Timestamp,
+			BlockNumber:     tx.BlockNumber,
+			GasUsed:         uint64(0), // Convert from string if needed
+			GasPrice:        tx.GasPrice,
+			GasFee:          tx.GasFee,
+			TransactionType: tx.TransactionType,
+			TxStatus:        entity.TransactionStatus(tx.Status),
+			RiskLevel:       tx.RiskLevel,
+		}
+	}
+
 	result := &entity.PairwiseTransactionResult{
-		Transactions: transactions,
+		Transactions: convertedTransactions,
 		Summary:      summary,
-		HasMore:      len(transactions) == int(limit),
-		Total:        int64(len(transactions)),
+		TotalCount:   int64(len(transactions)),
 	}
 
 	return result, nil
@@ -127,7 +145,7 @@ func (r *MongoTransactionRepository) GetMoneyFlowData(ctx context.Context, walle
 		account := entity.MoneyFlowAccount{
 			Address:          counterparty,
 			TotalValue:       fmt.Sprintf("%.0f", getFloat64Value(record, "total_value")),
-			TotalUSDValue:    getFloat64Value(record, "total_value"), // Would need price conversion
+			TotalUsdValue:    fmt.Sprintf("%.2f", getFloat64Value(record, "total_value")), // Would need price conversion
 			TransactionCount: getInt64Value(record, "transaction_count"),
 			FirstSeen:        getTimeValue(record, "first_transaction"),
 			LastSeen:         getTimeValue(record, "last_transaction"),
@@ -145,14 +163,14 @@ func (r *MongoTransactionRepository) GetMoneyFlowData(ctx context.Context, walle
 	summary := entity.MoneyFlowSummary{
 		TotalInbound:         "0",
 		TotalOutbound:        "0",
-		TotalInboundUSD:      0,
-		TotalOutboundUSD:     0,
-		UniqueCounterparties: int64(len(inboundAccounts) + len(outboundAccounts)),
+		TotalInboundUsd:      "0",
+		TotalOutboundUsd:     "0",
+		UniqueCounterparties: len(inboundAccounts) + len(outboundAccounts),
 		TimeRange: entity.TimeRange{
 			Start: time.Now().AddDate(0, -1, 0),
 			End:   time.Now(),
 		},
-		TopTokens: []entity.TokenSummary{},
+		TopTokens: []entity.TopToken{},
 	}
 
 	sankeyData := entity.SankeyData{
@@ -258,7 +276,7 @@ func (r *MongoTransactionRepository) convertToTransaction(record bson.M) entity.
 		Value:       getStringValue(record, "value"),
 		Timestamp:   getTimeValue(record, "crawled_at"),
 		BlockNumber: getStringValue(record, "block_number"),
-		GasUsed:     fmt.Sprintf("%d", getInt64Value(record, "gas_used")),
+		GasUsed:     uint64(getInt64Value(record, "gas_used")),
 		GasPrice:    getStringValue(record, "gas_price"),
 		Network:     getStringValue(record, "network"),
 		TxStatus:    entity.TransactionStatusSuccess, // Default

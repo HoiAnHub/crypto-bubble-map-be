@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -131,6 +132,9 @@ type ExternalConfig struct {
 	CoinGeckoAPIKey string `mapstructure:"coingecko_api_key"`
 	InfuraProjectID string `mapstructure:"infura_project_id"`
 	AlchemyAPIKey   string `mapstructure:"alchemy_api_key"`
+	OpenAIAPIKey    string `mapstructure:"openai_api_key"`
+	OpenAIModel     string `mapstructure:"openai_model"`
+	OpenAIBaseURL   string `mapstructure:"openai_base_url"`
 }
 
 // MonitoringConfig holds monitoring configuration
@@ -169,6 +173,12 @@ type AppConfig struct {
 
 // Load loads configuration from environment variables and config files
 func Load() (*Config, error) {
+	// Load .env file if it exists
+	if err := loadEnvFile(); err != nil {
+		// Log warning but don't fail - .env file is optional
+		fmt.Printf("Warning: Could not load .env file: %v\n", err)
+	}
+
 	viper.SetConfigName("config")
 	viper.SetConfigType("yaml")
 	viper.AddConfigPath(".")
@@ -203,6 +213,101 @@ func Load() (*Config, error) {
 	}
 
 	return &config, nil
+}
+
+// loadEnvFile loads environment variables from .env file
+func loadEnvFile() error {
+	// Try to load .env file from current directory
+	if err := loadEnvFromPath(".env"); err == nil {
+		return nil
+	}
+
+	// Try to load from parent directory (for when running from subdirectories)
+	if err := loadEnvFromPath("../.env"); err == nil {
+		return nil
+	}
+
+	return fmt.Errorf(".env file not found")
+}
+
+// loadEnvFromPath loads environment variables from a specific path
+func loadEnvFromPath(path string) error {
+	// Check if file exists
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		return err
+	}
+
+	// Read the file and set environment variables
+	file, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	// Parse and set environment variables
+	envMap, err := parseEnvFile(file)
+	if err != nil {
+		return err
+	}
+
+	for key, value := range envMap {
+		// Only set if not already set in environment
+		if os.Getenv(key) == "" {
+			os.Setenv(key, value)
+		}
+	}
+
+	return nil
+}
+
+// parseEnvFile parses a .env file and returns a map of key-value pairs
+func parseEnvFile(file *os.File) (map[string]string, error) {
+	envMap := make(map[string]string)
+
+	// Read file content
+	content := make([]byte, 0)
+	buffer := make([]byte, 1024)
+	for {
+		n, err := file.Read(buffer)
+		if n > 0 {
+			content = append(content, buffer[:n]...)
+		}
+		if err != nil {
+			break
+		}
+	}
+
+	// Parse lines
+	lines := strings.Split(string(content), "\n")
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+
+		// Skip empty lines and comments
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+
+		// Split on first = sign
+		parts := strings.SplitN(line, "=", 2)
+		if len(parts) != 2 {
+			continue
+		}
+
+		key := strings.TrimSpace(parts[0])
+		value := strings.TrimSpace(parts[1])
+
+		// Remove quotes if present
+		if len(value) >= 2 {
+			if (strings.HasPrefix(value, "\"") && strings.HasSuffix(value, "\"")) ||
+				(strings.HasPrefix(value, "'") && strings.HasSuffix(value, "'")) {
+				value = value[1 : len(value)-1]
+			}
+		}
+
+		envMap[key] = value
+	}
+
+	return envMap, nil
 }
 
 // bindEnvironmentVariables binds specific environment variables to config keys
@@ -272,6 +377,11 @@ func bindEnvironmentVariables() {
 	// External APIs
 	viper.BindEnv("external.ethereum_rpc_url", "ETHEREUM_RPC_URL")
 	viper.BindEnv("external.coingecko_api_key", "COINGECKO_API_KEY")
+	viper.BindEnv("external.infura_project_id", "INFURA_PROJECT_ID")
+	viper.BindEnv("external.alchemy_api_key", "ALCHEMY_API_KEY")
+	viper.BindEnv("external.openai_api_key", "OPENAI_API_KEY")
+	viper.BindEnv("external.openai_model", "OPENAI_MODEL")
+	viper.BindEnv("external.openai_base_url", "OPENAI_BASE_URL")
 
 	// GraphQL configuration
 	viper.BindEnv("graphql.playground_enabled", "GRAPHQL_PLAYGROUND_ENABLED")
@@ -374,6 +484,10 @@ func setDefaults() {
 	viper.SetDefault("monitoring.enable_tracing", false)
 	viper.SetDefault("monitoring.enable_profiling", false)
 	viper.SetDefault("monitoring.profiling_port", 6060)
+
+	// External API defaults
+	viper.SetDefault("external.openai_model", "gpt-3.5-turbo")
+	viper.SetDefault("external.openai_base_url", "https://api.openai.com/v1")
 
 	// Security defaults
 	viper.SetDefault("security.enable_rate_limiting", true)

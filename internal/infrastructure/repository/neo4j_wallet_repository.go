@@ -47,7 +47,7 @@ func (r *Neo4jWalletRepository) GetWalletNetwork(ctx context.Context, input *ent
 
 	// Process nodes and links
 	nodeMap := make(map[string]*entity.Wallet)
-	
+
 	for _, record := range data {
 		// Process center wallet
 		centerAddr := getStringValue(record, "center_address")
@@ -128,7 +128,7 @@ func (r *Neo4jWalletRepository) GetWallet(ctx context.Context, address string) (
 // GetWalletsByAddresses retrieves multiple wallets by addresses
 func (r *Neo4jWalletRepository) GetWalletsByAddresses(ctx context.Context, addresses []string) ([]entity.Wallet, error) {
 	var wallets []entity.Wallet
-	
+
 	for _, address := range addresses {
 		wallet, err := r.GetWallet(ctx, address)
 		if err != nil {
@@ -137,7 +137,7 @@ func (r *Neo4jWalletRepository) GetWalletsByAddresses(ctx context.Context, addre
 		}
 		wallets = append(wallets, *wallet)
 	}
-	
+
 	return wallets, nil
 }
 
@@ -170,9 +170,9 @@ func (r *Neo4jWalletRepository) GetWalletRankings(ctx context.Context, category 
 	}
 
 	result := &entity.WalletRankingResult{
-		Rankings: rankings,
-		HasMore:  len(rankings) == limit,
-		Total:    int64(len(rankings)), // This would need a separate count query
+		Rankings:   rankings,
+		TotalCount: int64(len(rankings)), // This would need a separate count query
+		Category:   entity.RankingCategory(category),
 	}
 
 	return result, nil

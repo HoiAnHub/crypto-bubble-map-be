@@ -60,17 +60,41 @@ type Wallet struct {
 	// Computed fields
 	TotalSent     *string `json:"total_sent,omitempty" neo4j:"total_sent"`
 	TotalReceived *string `json:"total_received,omitempty" neo4j:"total_received"`
+
+	// Frontend-specific fields
+	ImageUrl               *string    `json:"image_url,omitempty"`
+	HasImage               bool       `json:"has_image"`
+	HasVerifiedSocials     bool       `json:"has_verified_socials"`
+	SocialScore            int        `json:"social_score"`
+	QualityScore           int        `json:"quality_score"`
+	ReputationScore        int        `json:"reputation_score"`
+	TransactionVolume      *string    `json:"transaction_volume,omitempty"`
+	AverageTransactionSize *string    `json:"average_transaction_size,omitempty"`
+	ActivityFrequency      float64    `json:"activity_frequency"`
+	WalletAge              int        `json:"wallet_age"`
+	FirstTransactionDate   *time.Time `json:"first_transaction_date,omitempty"`
+	LastTransactionDate    *time.Time `json:"last_transaction_date,omitempty"`
+	ConnectionCount        int        `json:"connection_count"`
+	UniqueCounterparties   int        `json:"unique_counterparties"`
+	NetworkInfluence       int        `json:"network_influence"`
+	RiskFlags              []string   `json:"risk_flags"`
+	IsWhitelisted          bool       `json:"is_whitelisted"`
+	IsFlagged              bool       `json:"is_flagged"`
+	ProfitabilityScore     *int       `json:"profitability_score,omitempty"`
+	LiquidityScore         *int       `json:"liquidity_score,omitempty"`
 }
 
 // WalletConnection represents a connection between two wallets
 type WalletConnection struct {
-	Source           string    `json:"source" neo4j:"from_address"`
-	Target           string    `json:"target" neo4j:"to_address"`
-	Value            string    `json:"value" neo4j:"total_value"`
-	TransactionCount int64     `json:"transaction_count" neo4j:"tx_count"`
-	FirstTransaction time.Time `json:"first_transaction" neo4j:"first_tx"`
-	LastTransaction  time.Time `json:"last_transaction" neo4j:"last_tx"`
-	RiskLevel        RiskLevel `json:"risk_level"`
+	Source           string     `json:"source" neo4j:"from_address"`
+	Target           string     `json:"target" neo4j:"to_address"`
+	Value            string     `json:"value" neo4j:"total_value"`
+	TransactionCount int64      `json:"transaction_count" neo4j:"tx_count"`
+	FirstTransaction time.Time  `json:"first_transaction" neo4j:"first_tx"`
+	LastTransaction  time.Time  `json:"last_transaction" neo4j:"last_tx"`
+	RiskLevel        RiskLevel  `json:"risk_level"`
+	Timestamp        *time.Time `json:"timestamp,omitempty"`
+	Type             *string    `json:"type,omitempty"`
 }
 
 // WalletNetwork represents a network of connected wallets
@@ -213,9 +237,22 @@ type WalletNetworkInput struct {
 
 // WalletRankingResult represents paginated wallet ranking results
 type WalletRankingResult struct {
-	Rankings []WalletRanking `json:"rankings"`
-	HasMore  bool            `json:"has_more"`
-	Total    int64           `json:"total"`
+	Rankings   []WalletRanking `json:"rankings"`
+	TotalCount int64           `json:"total_count"`
+	Category   RankingCategory `json:"category"`
+}
+
+// DashboardStats represents dashboard statistics
+type DashboardStats struct {
+	TotalWallets        int64     `json:"total_wallets"`
+	TotalVolume         string    `json:"total_volume"`
+	TotalTransactions   int64     `json:"total_transactions"`
+	FlaggedWallets      int64     `json:"flagged_wallets"`
+	WhitelistedWallets  int64     `json:"whitelisted_wallets"`
+	AverageQualityScore float64   `json:"average_quality_score"`
+	AverageRiskScore    float64   `json:"average_risk_score"`
+	RecentActivity      int64     `json:"recent_activity"`
+	LastUpdate          time.Time `json:"last_update"`
 }
 
 // Helper methods for WalletType

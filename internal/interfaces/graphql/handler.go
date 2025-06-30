@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"crypto-bubble-map-be/graph"
+	"crypto-bubble-map-be/graph/generated"
 	"crypto-bubble-map-be/internal/infrastructure/logger"
 
 	"github.com/99designs/gqlgen/graphql/handler"
@@ -28,7 +29,7 @@ func NewHandler(resolver *graph.Resolver, logger *logger.Logger) *Handler {
 // GraphQLHandler returns a Gin handler for GraphQL requests
 func (h *Handler) GraphQLHandler() gin.HandlerFunc {
 	// Create GraphQL server
-	srv := handler.NewDefaultServer(graph.NewExecutableSchema(graph.Config{
+	srv := handler.NewDefaultServer(generated.NewExecutableSchema(generated.Config{
 		Resolvers: h.resolver,
 	}))
 

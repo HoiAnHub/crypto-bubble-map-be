@@ -9,6 +9,7 @@ import (
 	"crypto-bubble-map-be/internal/infrastructure/cache"
 	"crypto-bubble-map-be/internal/infrastructure/config"
 	"crypto-bubble-map-be/internal/infrastructure/database"
+	"crypto-bubble-map-be/internal/infrastructure/external"
 	"crypto-bubble-map-be/internal/infrastructure/logger"
 	repoImpl "crypto-bubble-map-be/internal/infrastructure/repository"
 
@@ -97,34 +98,29 @@ func NewTransactionRepository(mongo *database.MongoClient, logger *logger.Logger
 	return repoImpl.NewMongoTransactionRepository(mongo, logger.Logger)
 }
 
-func NewNetworkRepository(neo4j *database.Neo4jClient, mongo *database.MongoClient, logger *logger.Logger) repository.NetworkRepository {
-	return repoImpl.NewNetworkRepository(neo4j, mongo, logger.Logger)
+func NewNetworkRepository(neo4j *database.Neo4jClient, mongo *database.MongoClient, cfg *config.Config, logger *logger.Logger) repository.NetworkRepository {
+	apiClient := external.NewBlockchainAPIClient(&cfg.External, logger.Logger)
+	return repoImpl.NewNetworkRepository(neo4j, mongo, apiClient, logger.Logger)
 }
 
 func NewWatchListRepository(postgres *database.PostgreSQLClient, logger *logger.Logger) repository.WatchListRepository {
-	// This would be implemented similar to other repositories
-	// For now, return nil to avoid compilation errors
-	return nil
+	return repoImpl.NewPostgreSQLWatchListRepository(postgres, logger.Logger)
 }
 
-func NewSecurityRepository(logger *logger.Logger) repository.SecurityRepository {
-	// This would be implemented similar to other repositories
-	// For now, return nil to avoid compilation errors
-	return nil
+func NewSecurityRepository(mongo *database.MongoClient, logger *logger.Logger) repository.SecurityRepository {
+	return repoImpl.NewMongoSecurityRepository(mongo, logger.Logger)
 }
 
 func NewUserRepository(postgres *database.PostgreSQLClient, logger *logger.Logger) repository.UserRepository {
-	// This would be implemented similar to other repositories
-	// For now, return nil to avoid compilation errors
-	return nil
+	return repoImpl.NewPostgreSQLUserRepository(postgres, logger.Logger)
 }
 
 func NewCacheRepository(redis *cache.RedisClient, logger *logger.Logger) repository.CacheRepository {
 	return repoImpl.NewRedisCacheRepository(redis, logger.Logger)
 }
 
-func NewAIRepository(logger *logger.Logger) repository.AIRepository {
-	return repoImpl.NewMockAIRepository(logger.Logger)
+func NewAIRepository(cfg *config.Config, logger *logger.Logger) repository.AIRepository {
+	return repoImpl.NewOpenAIRepository(&cfg.External, logger.Logger)
 }
 
 // GraphQL resolver provider

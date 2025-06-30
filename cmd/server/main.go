@@ -9,10 +9,17 @@ import (
 	"syscall"
 	"time"
 
+	"crypto-bubble-map-be/graph"
 	"crypto-bubble-map-be/internal/infrastructure/cache"
 	"crypto-bubble-map-be/internal/infrastructure/config"
 	"crypto-bubble-map-be/internal/infrastructure/database"
+	"crypto-bubble-map-be/internal/infrastructure/external"
+	"crypto-bubble-map-be/internal/infrastructure/health"
 	"crypto-bubble-map-be/internal/infrastructure/logger"
+	"crypto-bubble-map-be/internal/infrastructure/middleware"
+	"crypto-bubble-map-be/internal/infrastructure/monitoring"
+	repoImpl "crypto-bubble-map-be/internal/infrastructure/repository"
+	"crypto-bubble-map-be/internal/interfaces/graphql"
 
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
@@ -20,13 +27,18 @@ import (
 
 // Server represents the HTTP server
 type Server struct {
-	config     *config.Config
-	logger     *logger.Logger
-	neo4j      *database.Neo4jClient
-	mongodb    *database.MongoClient
-	postgresql *database.PostgreSQLClient
-	redis      *cache.RedisClient
-	httpServer *http.Server
+	config             *config.Config
+	logger             *logger.Logger
+	neo4j              *database.Neo4jClient
+	mongodb            *database.MongoClient
+	postgresql         *database.PostgreSQLClient
+	redis              *cache.RedisClient
+	httpServer         *http.Server
+	resolver           *graph.Resolver
+	performanceMonitor *monitoring.PerformanceMonitor
+	systemMetrics      *monitoring.SystemMetrics
+	healthManager      *health.HealthManager
+	metricsCollector   *monitoring.MetricsCollector
 }
 
 // NewServer creates a new server instance
@@ -92,13 +104,55 @@ func NewServer() (*Server, error) {
 		log.Warn("Failed to create MongoDB indexes", zap.Error(err))
 	}
 
+	// Initialize repositories with real implementations
+	walletRepo := repoImpl.NewNeo4jWalletRepository(neo4jClient, log.Logger)
+	transactionRepo := repoImpl.NewMongoTransactionRepository(mongoClient, log.Logger)
+
+	// Create blockchain API client for NetworkRepository
+	apiClient := external.NewBlockchainAPIClient(&cfg.External, log.Logger)
+	networkRepo := repoImpl.NewNetworkRepository(neo4jClient, mongoClient, apiClient, log.Logger)
+
+	watchListRepo := repoImpl.NewPostgreSQLWatchListRepository(postgresClient, log.Logger)
+	securityRepo := repoImpl.NewMongoSecurityRepository(mongoClient, log.Logger)
+	userRepo := repoImpl.NewPostgreSQLUserRepository(postgresClient, log.Logger)
+	cacheRepo := repoImpl.NewRedisCacheRepository(redisClient, log.Logger)
+	aiRepo := repoImpl.NewOpenAIRepository(&cfg.External, log.Logger)
+
+	// Initialize monitoring and health systems
+	metricsCollector := monitoring.NewMetricsCollector(log.Logger)
+	performanceMonitor := monitoring.NewPerformanceMonitor(metricsCollector, log.Logger)
+	systemMetrics := monitoring.NewSystemMetrics(metricsCollector, log.Logger)
+
+	// Initialize health manager
+	healthManager := health.NewHealthManager(cfg, log.Logger)
+	health.SetupHealthCheckers(healthManager, postgresClient, mongoClient, neo4jClient, redisClient, cfg, log.Logger)
+
+	// Create GraphQL resolver with real repositories
+	resolver := graph.NewResolver(
+		walletRepo,
+		transactionRepo,
+		networkRepo,
+		watchListRepo,
+		securityRepo,
+		userRepo,
+		cacheRepo,
+		aiRepo,
+		redisClient,
+		log,
+	)
+
 	server := &Server{
-		config:     cfg,
-		logger:     log,
-		neo4j:      neo4jClient,
-		mongodb:    mongoClient,
-		postgresql: postgresClient,
-		redis:      redisClient,
+		config:             cfg,
+		logger:             log,
+		neo4j:              neo4jClient,
+		mongodb:            mongoClient,
+		postgresql:         postgresClient,
+		redis:              redisClient,
+		resolver:           resolver,
+		performanceMonitor: performanceMonitor,
+		systemMetrics:      systemMetrics,
+		healthManager:      healthManager,
+		metricsCollector:   metricsCollector,
 	}
 
 	// Setup HTTP server
@@ -117,29 +171,33 @@ func (s *Server) setupHTTPServer() error {
 	// Create Gin router
 	router := gin.New()
 
-	// Add middleware
+	// Add comprehensive middleware stack
+	router.Use(middleware.CorrelationIDMiddleware())
+	router.Use(middleware.DetailedLoggingMiddleware(s.logger.Logger, s.performanceMonitor))
+	router.Use(middleware.ErrorHandlerMiddleware(s.logger.Logger, s.performanceMonitor))
+	router.Use(middleware.SecurityLoggingMiddleware(s.logger.Logger))
+	router.Use(middleware.AuditLoggingMiddleware(s.logger.Logger))
+	router.Use(middleware.PerformanceLoggingMiddleware(s.logger.Logger, 5*time.Second))
+	router.Use(middleware.TimeoutMiddleware(30*time.Second, s.logger.Logger))
 	router.Use(s.corsMiddleware())
-	router.Use(s.loggingMiddleware())
-	router.Use(s.recoveryMiddleware())
 
 	if s.config.Security.EnableRateLimiting {
 		router.Use(s.rateLimitMiddleware())
 	}
 
-	// Health check endpoint
+	// Health check endpoints
 	router.GET("/health", s.healthHandler)
+	router.GET("/health/detailed", s.detailedHealthHandler)
 	router.GET("/ready", s.readinessHandler)
+	router.GET("/metrics", s.metricsHandler)
+	router.GET("/metrics/prometheus", s.prometheusMetricsHandler)
 
-	// GraphQL endpoint (placeholder - will be implemented later)
-	router.POST("/graphql", s.graphqlHandler)
+	// GraphQL endpoint
+	graphqlHandler := graphql.NewHandler(s.resolver, s.logger)
+	router.POST("/graphql", graphqlHandler.GraphQLHandler())
 
 	if s.config.GraphQL.PlaygroundEnabled {
-		router.GET("/playground", s.playgroundHandler)
-	}
-
-	// Metrics endpoint
-	if s.config.Monitoring.EnableMetrics {
-		router.GET("/metrics", s.metricsHandler)
+		router.GET("/playground", graphqlHandler.PlaygroundHandler())
 	}
 
 	// Create HTTP server
@@ -292,11 +350,20 @@ func (s *Server) playgroundHandler(c *gin.Context) {
 	})
 }
 
-// metricsHandler handles metrics requests
+// metricsHandler provides application metrics in JSON format
 func (s *Server) metricsHandler(c *gin.Context) {
-	// This will be implemented with Prometheus metrics
+	// Update system metrics before returning
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
+	defer cancel()
+
+	s.systemMetrics.UpdateSystemMetrics(ctx)
+
+	exporter := monitoring.NewMetricsExporter(s.metricsCollector, s.logger.Logger)
+	metrics := exporter.ExportJSON()
+
 	c.JSON(http.StatusOK, gin.H{
-		"message": "Metrics endpoint - coming soon",
+		"metrics":   metrics,
+		"timestamp": time.Now(),
 	})
 }
 
@@ -391,6 +458,36 @@ func (s *Server) rateLimitMiddleware() gin.HandlerFunc {
 
 		c.Next()
 	}
+}
+
+// detailedHealthHandler provides detailed health information
+func (s *Server) detailedHealthHandler(c *gin.Context) {
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
+	defer cancel()
+
+	health := s.healthManager.CheckHealth(ctx)
+
+	status := http.StatusOK
+	if health.Status != "healthy" {
+		status = http.StatusServiceUnavailable
+	}
+
+	c.JSON(status, health)
+}
+
+// prometheusMetricsHandler provides metrics in Prometheus format
+func (s *Server) prometheusMetricsHandler(c *gin.Context) {
+	// Update system metrics before returning
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
+	defer cancel()
+
+	s.systemMetrics.UpdateSystemMetrics(ctx)
+
+	exporter := monitoring.NewMetricsExporter(s.metricsCollector, s.logger.Logger)
+	prometheusMetrics := exporter.ExportPrometheus()
+
+	c.Header("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
+	c.String(http.StatusOK, prometheusMetrics)
 }
 
 // main function

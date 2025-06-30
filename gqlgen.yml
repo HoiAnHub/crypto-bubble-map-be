@@ -34,14 +34,11 @@ autobind:
 models:
   # Scalars
   Time:
-    model:
-      - time.Time
+    model: time.Time
   JSON:
-    model:
-      - map[string]interface{}
+    model: map[string]interface{}
   BigInt:
-    model:
-      - string
+    model: string
 
 # Optional: set to speed up generation time by not performing a final validation pass.
 skip_validation: false

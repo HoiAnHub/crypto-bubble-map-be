@@ -6,41 +6,41 @@ import "time"
 type NetworkCategory string
 
 const (
-	NetworkCategoryLayer1   NetworkCategory = "LAYER1"
-	NetworkCategoryLayer2   NetworkCategory = "LAYER2"
+	NetworkCategoryLayer1    NetworkCategory = "LAYER1"
+	NetworkCategoryLayer2    NetworkCategory = "LAYER2"
 	NetworkCategorySidechain NetworkCategory = "SIDECHAIN"
 )
 
 // NetworkInfo represents information about a blockchain network
 type NetworkInfo struct {
-	ID           string          `json:"id"`
-	Name         string          `json:"name"`
-	Symbol       string          `json:"symbol"`
-	Category     NetworkCategory `json:"category"`
-	TVL          *float64        `json:"tvl,omitempty"`
-	DailyTransactions *int       `json:"daily_transactions,omitempty"`
-	TPS          *int            `json:"tps,omitempty"`
-	GasPrice     *float64        `json:"gas_price,omitempty"`
-	BlockTime    *int            `json:"block_time,omitempty"`
-	IsActive     bool            `json:"is_active"`
-	GradientFrom string          `json:"gradient_from"`
-	GradientTo   string          `json:"gradient_to"`
-	Icon         string          `json:"icon"`
-	Description  *string         `json:"description,omitempty"`
-	Website      *string         `json:"website,omitempty"`
-	Explorer     *string         `json:"explorer,omitempty"`
+	ID                string          `json:"id"`
+	Name              string          `json:"name"`
+	Symbol            string          `json:"symbol"`
+	Category          NetworkCategory `json:"category"`
+	TVL               *float64        `json:"tvl,omitempty"`
+	DailyTransactions *int            `json:"daily_transactions,omitempty"`
+	TPS               *int            `json:"tps,omitempty"`
+	GasPrice          *float64        `json:"gas_price,omitempty"`
+	BlockTime         *int            `json:"block_time,omitempty"`
+	IsActive          bool            `json:"is_active"`
+	GradientFrom      string          `json:"gradient_from"`
+	GradientTo        string          `json:"gradient_to"`
+	Icon              string          `json:"icon"`
+	Description       *string         `json:"description,omitempty"`
+	Website           *string         `json:"website,omitempty"`
+	Explorer          *string         `json:"explorer,omitempty"`
 }
 
 // NetworkStats represents statistics for a specific network
 type NetworkStats struct {
-	NetworkID       string                  `json:"network_id"`
-	TotalWallets    int64                   `json:"total_wallets"`
-	TotalVolume     string                  `json:"total_volume"`
-	TotalTransactions int64                 `json:"total_transactions"`
-	FlaggedWallets  int64                   `json:"flagged_wallets"`
-	WalletTypes     WalletTypeDistribution  `json:"wallet_types"`
-	RiskDistribution RiskDistribution       `json:"risk_distribution"`
-	LastUpdate      time.Time               `json:"last_update"`
+	NetworkID         string                 `json:"network_id"`
+	TotalWallets      int64                  `json:"total_wallets"`
+	TotalVolume       string                 `json:"total_volume"`
+	TotalTransactions int64                  `json:"total_transactions"`
+	FlaggedWallets    int64                  `json:"flagged_wallets"`
+	WalletTypes       WalletTypeDistribution `json:"wallet_types"`
+	RiskDistribution  RiskDistribution       `json:"risk_distribution"`
+	LastUpdate        time.Time              `json:"last_update"`
 }
 
 // WalletTypeDistribution represents the distribution of wallet types
@@ -65,12 +65,12 @@ type NetworkRanking struct {
 
 // NetworkMetrics represents comprehensive metrics for network ranking
 type NetworkMetrics struct {
-	TVL                float64 `json:"tvl"`
-	MarketCap          float64 `json:"market_cap"`
-	DailyVolume        float64 `json:"daily_volume"`
-	ActiveUsers        int64   `json:"active_users"`
-	DeveloperActivity  float64 `json:"developer_activity"`
-	EcosystemGrowth    float64 `json:"ecosystem_growth"`
+	TVL               float64 `json:"tvl"`
+	MarketCap         float64 `json:"market_cap"`
+	DailyVolume       float64 `json:"daily_volume"`
+	ActiveUsers       int64   `json:"active_users"`
+	DeveloperActivity float64 `json:"developer_activity"`
+	EcosystemGrowth   float64 `json:"ecosystem_growth"`
 }
 
 // NetworkActivity represents network activity over time
@@ -88,21 +88,6 @@ type NetworkActivityUpdate struct {
 	TransactionCount int64     `json:"transaction_count"`
 	Volume           string    `json:"volume"`
 	UniqueWallets    int64     `json:"unique_wallets"`
-}
-
-// DashboardStats represents overall dashboard statistics
-type DashboardStats struct {
-	TotalWallets         int64                   `json:"total_wallets"`
-	TotalVolume          string                  `json:"total_volume"`
-	TotalTransactions    int64                   `json:"total_transactions"`
-	FlaggedWallets       int64                   `json:"flagged_wallets"`
-	WhitelistedWallets   int64                   `json:"whitelisted_wallets"`
-	AverageQualityScore  float64                 `json:"average_quality_score"`
-	WalletTypes          WalletTypeDistribution  `json:"wallet_types"`
-	RiskDistribution     RiskDistribution        `json:"risk_distribution"`
-	NetworkActivity      []NetworkActivity       `json:"network_activity"`
-	TopTokens            []string                `json:"top_tokens"`
-	RecentActivity       []ActivitySummary       `json:"recent_activity"`
 }
 
 // ActivitySummary represents a summary of recent activity
@@ -259,7 +244,7 @@ func (ns *NetworkStats) GetWalletTypePercentage(walletType string) float64 {
 	if ns.TotalWallets == 0 {
 		return 0
 	}
-	
+
 	var count int64
 	switch walletType {
 	case "regular":
@@ -277,18 +262,18 @@ func (ns *NetworkStats) GetWalletTypePercentage(walletType string) float64 {
 	case "miner":
 		count = ns.WalletTypes.Miner
 	}
-	
+
 	return float64(count) / float64(ns.TotalWallets) * 100
 }
 
 func (ns *NetworkStats) GetRiskPercentage(riskLevel string) float64 {
-	total := ns.RiskDistribution.Low + ns.RiskDistribution.Medium + 
-			ns.RiskDistribution.High + ns.RiskDistribution.Critical
-	
+	total := ns.RiskDistribution.Low + ns.RiskDistribution.Medium +
+		ns.RiskDistribution.High + ns.RiskDistribution.Critical
+
 	if total == 0 {
 		return 0
 	}
-	
+
 	var count int64
 	switch riskLevel {
 	case "low":
@@ -300,6 +285,6 @@ func (ns *NetworkStats) GetRiskPercentage(riskLevel string) float64 {
 	case "critical":
 		count = ns.RiskDistribution.Critical
 	}
-	
+
 	return float64(count) / float64(total) * 100
 }

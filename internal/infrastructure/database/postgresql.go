@@ -96,11 +96,22 @@ func (c *PostgreSQLClient) GetDB() *gorm.DB {
 
 // AutoMigrate runs database migrations
 func (c *PostgreSQLClient) AutoMigrate() error {
+	// Import the UserSession type from repository package
+	type UserSession struct {
+		ID        uint      `gorm:"primaryKey"`
+		UserID    uint      `gorm:"not null;index"`
+		SessionID string    `gorm:"uniqueIndex;not null"`
+		ExpiresAt time.Time `gorm:"not null;index"`
+		CreatedAt time.Time
+		UpdatedAt time.Time
+	}
+
 	err := c.db.AutoMigrate(
 		&entity.User{},
 		&entity.WatchedWallet{},
 		&entity.WatchedWalletTag{},
 		&entity.WalletAlert{},
+		&UserSession{},
 	)
 	if err != nil {
 		c.logger.Error("Failed to run auto migration", zap.Error(err))
